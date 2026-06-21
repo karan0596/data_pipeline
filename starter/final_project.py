@@ -3,6 +3,7 @@ import pendulum
 import os
 from airflow.decorators import dag
 from airflow.models import Variable
+from airflow.models.baseoperator import chain
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.postgres_operator import PostgresOperator
 from final_project_operators.stage_redshift import StageToRedshiftOperator
@@ -132,13 +133,44 @@ def final_project():
         sql=SqlQueries.time_table_insert,
         mode='delete-load'
     )
+
+
+    # Define tests as data structure
+    quality_tests = [
+        {
+            'check_sql': 'SELECT COUNT(*) FROM users',
+            'expected_min': 1,
+            'description': 'Users table has records'
+        },
+        {
+            'check_sql': 'SELECT COUNT(*) FROM users WHERE userid IS NULL',
+            'expected_value': 0,
+            'description': 'No null user IDs'
+        },
+        {
+            'check_sql': 'SELECT COUNT(*) FROM songs',
+            'expected_min': 1,
+            'description': 'Songs table has records'
+        },
+        {
+            'check_sql': 'SELECT COUNT(*) FROM songplays',
+            'expected_min': 1,
+            'description': 'Songplays table has records'
+        }
+    ]   
+     
     
     run_quality_checks = DataQualityOperator(
         task_id='Run_data_quality_checks',
         redshift_conn_id='redshift',
-        tables=['songplays', 'users', 'songs', 'artists', 'time']  
+        tests=quality_tests
     )
 
+
+    end_operator = DummyOperator(task_id='End_execution')
+
+
+    # dependencies
     start_operator >> create_staging_tables >> [stage_events_to_redshift, stage_songs_to_redshift]
 
     [stage_events_to_redshift, stage_songs_to_redshift] >> create_fact_table
@@ -146,16 +178,18 @@ def final_project():
     create_fact_table >> load_songplays_table
 
     load_songplays_table >> [create_user_dimension_table, create_song_dimension_table, create_artist_dimension_table, create_time_dimension_table]
-    
-    # [create_user_dimension_table, create_song_dimension_table, create_artist_dimension_table, create_time_dimension_table] >> [load_user_dimension_table, load_song_dimension_table, load_artist_dimension_table, load_time_dimension_table] 
-    
-    create_user_dimension_table >> load_user_dimension_table
-    create_song_dimension_table >> load_song_dimension_table
-    create_artist_dimension_table >> load_artist_dimension_table
-    create_time_dimension_table >> load_time_dimension_table
+
+    chain(
+      [create_user_dimension_table, create_song_dimension_table,
+       create_artist_dimension_table, create_time_dimension_table],
+      [load_user_dimension_table, load_song_dimension_table,
+       load_artist_dimension_table, load_time_dimension_table])
     
     
     [load_user_dimension_table, load_song_dimension_table, load_artist_dimension_table, load_time_dimension_table] >> run_quality_checks
+
+
+    run_quality_checks >> end_operator
 
 
 final_project_dag = final_project()
