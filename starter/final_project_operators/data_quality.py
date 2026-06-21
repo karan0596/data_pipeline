@@ -16,16 +16,27 @@ class DataQualityOperator(BaseOperator):
         self.redshift_conn_id = redshift_conn_id
         self.tables=tables
 
-    def execute(self, context):
-        self.log.info('Starting Data Quality test:')
+    def execute(self, context): 
+        redshift = PostgresHook(postgres_conn_id=self.redshift_conn_id)
 
-        redshift_hook = PostgresHook(postgres_conn_id=self.redshift_conn_id)
+        for test in self.tests:
+            self.log.info(f"Running test: {test['check_sql']}")
+            result = redshift.get_first(test['check_sql'])
 
-        for table in self.tables:
-            records = redshift_hook.get_records(f'SELECT COUNT(*) FROM {table}')
-            if len(records) < 1 or len(records[0]) < 1:
-                raise ValueError(f"Data quality check failed. {table} returned no results")
-            num_records = records[0][0]
-            if num_records < 1:
-                raise ValueError(f"Data quality check failed. {table} contained 0 rows")
-            self.log.info(f"Data quality on table {table} check passed with {records[0][0]} records")
+            if result is None or len(result) == 0:
+                raise ValueError(f"Test returned no results: {test['check_sql']}")
+
+            # Compare based on test configuration
+            if 'expected_value' in test and result[0] != test['expected_value']:
+                raise ValueError(
+                    f"Test failed: {test['check_sql']}. "
+                    f"Expected {test['expected_value']}, got {result[0]}"
+                )
+
+            if 'expected_min' in test and result[0] < test['expected_min']:
+                raise ValueError(
+                    f"Test failed: {test['check_sql']}. "
+                    f"Expected minimum {test['expected_min']}, got {result[0]}"
+                )
+
+            self.log.info(f"Test passed: {test['check_sql']}")
