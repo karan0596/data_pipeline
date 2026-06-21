@@ -88,3 +88,44 @@ This project implements four reusable Airflow operators:
 Example test:
 ```sql
 SELECT COUNT(*) FROM users WHERE user_id IS NULL;
+```
+
+## 🔐 AWS Setup Requirements
+
+Before running the pipeline, ensure the following AWS resources are configured:
+
+- IAM User is created with proper permissions
+- Amazon Redshift Serverless is configured
+- Airflow connections for AWS and Redshift are properly set up
+
+---
+
+## ☁️ Data Setup (Amazon S3)
+
+This project uses datasets provided by Udacity. You must copy them into your own S3 bucket.
+
+
+### 📥 Step 1: Copy Udacity data locally (CloudShell)
+
+```bash
+aws s3 cp s3://udacity-dend/log-data/ ~/log-data/ --recursive
+aws s3 cp s3://udacity-dend/song-data/ ~/song-data/ --recursive
+aws s3 cp s3://udacity-dend/log_json_path.json ~/
+```
+
+### 📤 Step 2: Upload Data to Your S3 Bucket
+
+Replace `your-bucket` with your actual S3 bucket name.
+
+```bash
+aws s3 cp ~/log-data/ s3://your-bucket/log-data/ --recursive
+aws s3 cp ~/song-data/ s3://your-bucket/song-data/ --recursive
+aws s3 cp ~/log_json_path.json s3://your-bucket/
+```
+
+### 📤 Step 3: Verify Upload
+```bash
+aws s3 ls s3://your-bucket/log-data/
+aws s3 ls s3://your-bucket/song-data/
+aws s3 ls s3://your-bucket/
+```
